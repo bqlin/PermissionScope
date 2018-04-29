@@ -961,7 +961,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 		} break;
 		default:{} break;
 	}
-	CBPeripheralManagerState state = self.bluetoothManager.state;
+	CBPeripheralManagerState state = (CBPeripheralManagerState)self.bluetoothManager.state;
 	switch (state) {
 		case CBPeripheralManagerStateUnsupported:
 		case CBPeripheralManagerStatePoweredOff:{
@@ -1266,7 +1266,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
  its permission dialog.
  */
 - (void)triggerBluetoothStatusUpdate {
-	if (!self.waitingForBluetooth && self.bluetoothManager.state == CBManagerStateUnknown) {
+	if (!self.waitingForBluetooth && self.bluetoothManager.state == CBPeripheralManagerStateUnknown) {
 		[self.bluetoothManager startAdvertising:nil];
 		[self.bluetoothManager stopAdvertising];
 		self.askedBluetooth = YES;
