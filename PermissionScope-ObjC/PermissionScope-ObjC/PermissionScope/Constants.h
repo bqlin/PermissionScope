@@ -22,4 +22,14 @@ static NSString * const ConstantsNSUserDefaultsKeysRequestedNotifications = @"PS
 static NSString * const ConstantsInfoPlistKeysLocationWhenInUse = @"NSLocationWhenInUseUsageDescription";
 static NSString * const ConstantsInfoPlistKeysLocationAlways = @"NSLocationAlwaysUsageDescription";
 
+#define Xcode9 __IPHONE_OS_VERSION_MAX_ALLOWED >= 110000
+
+#if Xcode9
+#define BQ_AVAILABLE(v) @available(iOS v, *)
+
+#else
+#define BQ_AVAILABLE(v) ([UIDevice currentDevice].systemVersion.floatValue > (v))
+
+#endif
+
 #endif /* Constants_h */

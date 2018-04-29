@@ -332,6 +332,8 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 
 #pragma mark - public
 
+// MARK: UI
+
 /**
  Shows the modal viewcontroller for requesting access to the configured permissions and sets up the closures on it.
  
@@ -353,7 +355,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 					if (weakSelf.onAuthChange) self.onAuthChange(YES, results);
 				}];
 			} else {
-				[self showAlert];
+				[weakSelf showAlert];
 			}
 		}];
 	});
@@ -492,7 +494,6 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 /**
  Adds a permission configuration to PermissionScope.
  
- - parameter config: Configuration for a specific permission.
  - parameter message: Body label's text on the presented dialog when requesting access.
  */
 - (void)addPermission:(id<Permission>)permission message:(NSString *)message {
@@ -545,7 +546,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
  - returns: Permission status for the requested type.
  */
 - (PermissionStatus)statusContacts {
-	if (@available(iOS 9.0, *)) {
+	if (BQ_AVAILABLE(9)) {
 		CNAuthorizationStatus status = [CNContactStore authorizationStatusForEntityType:CNEntityTypeContacts];
 		switch (status) {
 			case CNAuthorizationStatusAuthorized:{
@@ -585,7 +586,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 	switch (status) {
 		case PermissionStatusUnknown:{
 			__weak typeof(self) weakSelf = self;
-			if (@available(iOS 9.0, *)) {
+			if (BQ_AVAILABLE(9)) {
 				[[[CNContactStore alloc] init] requestAccessForEntityType:CNEntityTypeContacts completionHandler:^(BOOL granted, NSError * _Nullable error) {
 					[weakSelf detectAndCallback];
 				}];
@@ -668,7 +669,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 			if (notificationResult.status == PermissionStatusUnknown) {
 				[weakSelf showDeniedAlert:notificationResult.type];
 			} else {
-				[self detectAndCallback];
+				[weakSelf detectAndCallback];
 			}
 		}];
 	});
@@ -692,9 +693,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 			NSSet<UIUserNotificationCategory *> *notificationsPermissionSet = notificationsPermission.notificationCategories;
 			[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(showingNotificationPermission) name:UIApplicationWillResignActiveNotification object:nil];
 			self.notificationTimer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(finishedShowingNotificationPermission) userInfo:nil repeats:NO];
-			[[UIApplication sharedApplication] registerUserNotificationSettings:[UIUserNotificationSettings settingsForTypes:
-																				 UIUserNotificationTypeAlert | UIUserNotificationTypeSound | UIUserNotificationTypeBadge
-																												  categories:notificationsPermissionSet]];
+			[[UIApplication sharedApplication] registerUserNotificationSettings:[UIUserNotificationSettings settingsForTypes:UIUserNotificationTypeAlert | UIUserNotificationTypeSound | UIUserNotificationTypeBadge categories:notificationsPermissionSet]];
 		} break;
 		case PermissionStatusUnauthorized:{
 			[self showDeniedAlert:PermissionTypeNotifications];
@@ -705,7 +704,6 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 		case PermissionStatusAuthorized:{
 			[self detectAndCallback];
 		} break;
-		default:{} break;
 	}
 }
 
@@ -749,9 +747,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 		case PermissionStatusDisabled:{
 			[self showDisabledAlert:PermissionTypeMicrophone];
 		} break;
-		case PermissionStatusAuthorized:{
-			
-		} break;
+		case PermissionStatusAuthorized:{} break;
 	}
 }
 
@@ -796,10 +792,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 		case PermissionStatusDisabled:{
 			[self showDisabledAlert:PermissionTypeCamera];
 		} break;
-		case PermissionStatusAuthorized:{
-			
-		} break;
-		default:{} break;
+		case PermissionStatusAuthorized:{} break;
 	}
 }
 
@@ -844,8 +837,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 		case PermissionStatusDisabled:{
 			[self showDisabledAlert:PermissionTypePhotos];
 		} break;
-		case PermissionStatusAuthorized:{
-		} break;
+		case PermissionStatusAuthorized:{} break;
 	}
 }
 
@@ -1208,12 +1200,12 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 			[button setTitle:[NSString stringWithFormat:@"Enable %@", PrettyDescriptionWithPermissionType(type)].localized.uppercaseString forState:UIControlStateNormal];
 		} break;
 		default:{
-			[button setTitle:[NSString stringWithFormat:@"Allow %@", NSStringFromPermissionType(type)].localized.uppercaseString forState:UIControlStateNormal];
+			[button setTitle:[NSString stringWithFormat:@"Allow %@", DescriptionWithPermissionType(type)].localized.uppercaseString forState:UIControlStateNormal];
 		} break;
 	}
 
-	[button addTarget:self action:NSSelectorFromString([NSString stringWithFormat:@"request%@", NSStringFromPermissionType(type)]) forControlEvents:UIControlEventTouchUpInside];
-	button.accessibilityIdentifier = [NSString stringWithFormat:@"permissionscope.button.%@", NSStringFromPermissionType(type)].lowercaseString;
+	[button addTarget:self action:NSSelectorFromString([NSString stringWithFormat:@"request%@", DescriptionWithPermissionType(type)]) forControlEvents:UIControlEventTouchUpInside];
+	button.accessibilityIdentifier = [NSString stringWithFormat:@"permissionscope.button.%@", DescriptionWithPermissionType(type)].lowercaseString;
 	
 	return button;
 }
@@ -1255,7 +1247,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 		[weakSelf.motionManager stopActivityUpdates];
 		if (tmpMotionPermissionStatus != weakSelf.motionPermissionStatus) {
 			weakSelf.waitingForMotion = NO;
-			[self detectAndCallback];
+			[weakSelf detectAndCallback];
 		}
 	}];
 	self.askedMotion = YES;

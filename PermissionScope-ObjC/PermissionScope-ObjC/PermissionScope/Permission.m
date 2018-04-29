@@ -15,6 +15,98 @@
 #import <CoreBluetooth/CoreBluetooth.h>
 #import <CoreMotion/CoreMotion.h>
 #import <Contacts/Contacts.h>
+#import "Extensions.h"
+
+NSString *DescriptionWithPermissionType(PermissionType type) {
+	switch (type) {
+		case PermissionTypeLocationAlways:{
+			return @"LocationAlways".localized;
+		}break;
+		case PermissionTypeLocationInUse:{
+			return @"LocationInUse".localized;
+		} break;
+		case PermissionTypeBluetooth:{
+			return @"Bluetooth".localized;
+		} break;
+		case PermissionTypeCamera:{
+			return @"Camera".localized;
+		} break;
+		case PermissionTypeContacts:{
+			return @"Contacts".localized;
+		} break;
+		case PermissionTypeEvents:{
+			return @"Events".localized;
+		} break;
+		case PermissionTypeMicrophone:{
+			return @"Microphone".localized;
+		} break;
+		case PermissionTypeMotion:{
+			return @"Motion".localized;
+		} break;
+		case PermissionTypeNotifications:{
+			return @"Notifications".localized;
+		} break;
+		case PermissionTypePhotos:{
+			return @"Photos".localized;
+		} break;
+		case PermissionTypeReminders:{
+			return @"Reminders".localized;
+		} break;
+	}
+}
+
+NSString *PrettyDescriptionWithPermissionType(PermissionType type) {
+	switch (type) {
+		case PermissionTypeLocationAlways:
+		case PermissionTypeLocationInUse:{
+			return @"Location".localized;
+		} break;
+		case PermissionTypeBluetooth:{
+			return @"Bluetooth".localized;
+		} break;
+		case PermissionTypeCamera:{
+			return @"Camera".localized;
+		} break;
+		case PermissionTypeContacts:{
+			return @"Contacts".localized;
+		} break;
+		case PermissionTypeEvents:{
+			return @"Events".localized;
+		} break;
+		case PermissionTypeMicrophone:{
+			return @"Microphone".localized;
+		} break;
+		case PermissionTypeMotion:{
+			return @"Motion".localized;
+		} break;
+		case PermissionTypeNotifications:{
+			return @"Notifications".localized;
+		} break;
+		case PermissionTypePhotos:{
+			return @"Photos".localized;
+		} break;
+		case PermissionTypeReminders:{
+			return @"Reminders".localized;
+		} break;
+	}
+}
+
+NSString *DescriptionWithPermissionStatus(PermissionStatus status) {
+	switch (status) {
+		case PermissionStatusAuthorized:{
+			return @"Authorized".localized;
+		} break;
+		case PermissionStatusUnauthorized:{
+			return @"Unauthorized".localized;
+		} break;
+		case PermissionStatusUnknown:{
+			return @"Unknown".localized;
+		} break;
+		case PermissionStatusDisabled:{
+			return @"Disabled".localized; // System-level
+		} break;
+	}
+}
 
 @implementation PermissionResult
 
@@ -24,6 +116,10 @@
 		_status = status;
 	}
 	return self;
+}
+
+- (NSString *)description {
+	return [NSString stringWithFormat:@"%@ %@", DescriptionWithPermissionType(_type), DescriptionWithPermissionStatus(_status)];
 }
 
 @end

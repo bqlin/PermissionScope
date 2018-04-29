@@ -22,80 +22,8 @@ typedef NS_ENUM(NSInteger, PermissionType) {
 	PermissionTypeBluetooth = 9,
 	PermissionTypeMotion = 10,
 };
-
-NS_INLINE NSString *NSStringFromPermissionType(PermissionType type) {
-	switch (type) {
-		case PermissionTypeLocationAlways:{
-			return @"LocationAlways";
-		}break;
-		case PermissionTypeLocationInUse:{
-			return @"LocationInUse";
-		} break;
-		case PermissionTypeBluetooth:{
-			return @"Bluetooth";
-		} break;
-		case PermissionTypeCamera:{
-			return @"Camera";
-		} break;
-		case PermissionTypeContacts:{
-			return @"Contacts";
-		} break;
-		case PermissionTypeEvents:{
-			return @"Events";
-		} break;
-		case PermissionTypeMicrophone:{
-			return @"Microphone";
-		} break;
-		case PermissionTypeMotion:{
-			return @"Motion";
-		} break;
-		case PermissionTypeNotifications:{
-			return @"Notifications";
-		} break;
-		case PermissionTypePhotos:{
-			return @"Photos";
-		} break;
-		case PermissionTypeReminders:{
-			return @"Reminders";
-		} break;
-	}
-}
-
-NS_INLINE NSString *PrettyDescriptionWithPermissionType(PermissionType type) {
-	switch (type) {
-		case PermissionTypeLocationAlways:
-		case PermissionTypeLocationInUse:{
-			return @"Location";
-		} break;
-		case PermissionTypeBluetooth:{
-			return @"Bluetooth";
-		} break;
-		case PermissionTypeCamera:{
-			return @"Camera";
-		} break;
-		case PermissionTypeContacts:{
-			return @"Contacts";
-		} break;
-		case PermissionTypeEvents:{
-			return @"Events";
-		} break;
-		case PermissionTypeMicrophone:{
-			return @"Microphone";
-		} break;
-		case PermissionTypeMotion:{
-			return @"Motion";
-		} break;
-		case PermissionTypeNotifications:{
-			return @"Notifications";
-		} break;
-		case PermissionTypePhotos:{
-			return @"Photos";
-		} break;
-		case PermissionTypeReminders:{
-			return @"Reminders";
-		} break;
-	}
-}
+NSString *DescriptionWithPermissionType(PermissionType type);
+NSString *PrettyDescriptionWithPermissionType(PermissionType type);
 
 /// Possible statuses for a permission.
 typedef NS_ENUM(NSInteger, PermissionStatus) {
@@ -104,6 +32,7 @@ typedef NS_ENUM(NSInteger, PermissionStatus) {
 	PermissionStatusUnknown = 2,
 	PermissionStatusDisabled = 3,
 };
+NSString *DescriptionWithPermissionStatus(PermissionStatus status);
 
 @interface PermissionResult : NSObject
 
