@@ -1079,6 +1079,7 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 		CGPoint baseViewCenter = self.baseView.center;
 		baseViewCenter.y = window.center.y + 15;
 		self.baseView.center = baseViewCenter;
+		self.view.alpha = 1;
 	} completion:^(BOOL finished) {
 		[UIView animateWithDuration:0.2 animations:^{
 			self.baseView.center = window.center;
