@@ -19,12 +19,12 @@
 		035503B42095AE7C001EAA0B /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 035503B12095AE7C001EAA0B /* Main.storyboard */; };
 		035503BA2095AE89001EAA0B /* AppDelegate.m in Sources */ = {isa = PBXBuildFile; fileRef = 035503B52095AE89001EAA0B /* AppDelegate.m */; };
 		035503BC2095AE89001EAA0B /* ViewController.m in Sources */ = {isa = PBXBuildFile; fileRef = 035503B92095AE89001EAA0B /* ViewController.m */; };
-		035503BD2095AEFB001EAA0B /* PermissionScope.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0336688320959D2500D8C8E8 /* PermissionScope.framework */; };
+		035503BD2095AEFB001EAA0B /* PermissionScopeObjC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0336688320959D2500D8C8E8 /* PermissionScopeObjC.framework */; };
 		03D6E2982095BFDF00D10D6C /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 03D6E2972095BFDF00D10D6C /* Images.xcassets */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		0336688320959D2500D8C8E8 /* PermissionScope.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PermissionScope.framework; sourceTree = BUILT_PRODUCTS_DIR; };
+		0336688320959D2500D8C8E8 /* PermissionScopeObjC.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = PermissionScopeObjC.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		0336688620959D2500D8C8E8 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		035503842095ABCC001EAA0B /* objc-example.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "objc-example.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		035503942095ABCC001EAA0B /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -57,7 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				035503BD2095AEFB001EAA0B /* PermissionScope.framework in Frameworks */,
+				035503BD2095AEFB001EAA0B /* PermissionScopeObjC.framework in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -108,7 +108,7 @@
 		03E4DACC20915E54003AB62E /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				0336688320959D2500D8C8E8 /* PermissionScope.framework */,
+				0336688320959D2500D8C8E8 /* PermissionScopeObjC.framework */,
 				035503842095ABCC001EAA0B /* objc-example.app */,
 			);
 			name = Products;
@@ -154,9 +154,9 @@
 /* End PBXHeadersBuildPhase section */
 
 /* Begin PBXNativeTarget section */
-		0336688220959D2500D8C8E8 /* PermissionScope */ = {
+		0336688220959D2500D8C8E8 /* PermissionScopeObjC */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 0336688E20959D2500D8C8E8 /* Build configuration list for PBXNativeTarget "PermissionScope" */;
+			buildConfigurationList = 0336688E20959D2500D8C8E8 /* Build configuration list for PBXNativeTarget "PermissionScopeObjC" */;
 			buildPhases = (
 				0336687E20959D2500D8C8E8 /* Sources */,
 				0336687F20959D2500D8C8E8 /* Frameworks */,
@@ -167,9 +167,9 @@
 			);
 			dependencies = (
 			);
-			name = PermissionScope;
+			name = PermissionScopeObjC;
 			productName = PermissionScope;
-			productReference = 0336688320959D2500D8C8E8 /* PermissionScope.framework */;
+			productReference = 0336688320959D2500D8C8E8 /* PermissionScopeObjC.framework */;
 			productType = "com.apple.product-type.framework";
 		};
 		035503832095ABCC001EAA0B /* objc-example */ = {
@@ -221,7 +221,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				0336688220959D2500D8C8E8 /* PermissionScope */,
+				0336688220959D2500D8C8E8 /* PermissionScopeObjC */,
 				035503832095ABCC001EAA0B /* objc-example */,
 			);
 		};
@@ -473,7 +473,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		0336688E20959D2500D8C8E8 /* Build configuration list for PBXNativeTarget "PermissionScope" */ = {
+		0336688E20959D2500D8C8E8 /* Build configuration list for PBXNativeTarget "PermissionScopeObjC" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				0336688C20959D2500D8C8E8 /* Debug */,
