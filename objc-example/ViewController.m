@@ -9,7 +9,7 @@
 #import "ViewController.h"
 
 #ifdef PERMISSIONSCOPE_OBJC
-#import <PermissionScope/PermissionScope.h>
+#import <PermissionScopeObjC/PermissionScope.h>
 #else
 #import <PermissionScope/PermissionScope-Swift.h>
 #endif
