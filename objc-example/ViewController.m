@@ -7,7 +7,12 @@
 //
 
 #import "ViewController.h"
+
+#ifdef PERMISSIONSCOPE_OBJC
+#import <PermissionScope/PermissionScope.h>
+#else
 #import <PermissionScope/PermissionScope-Swift.h>
+#endif
 
 @interface ObjCViewController ()
 @property (nonatomic, strong) PermissionScope *singlePscope;

@@ -1,8 +1,8 @@
 //
 //  main.m
-//  PermissionScope-ObjC
+//  objc-example
 //
-//  Created by Bq Lin on 2018/4/26.
+//  Created by Bq Lin on 2018/4/29.
 //  Copyright © 2018年 Bq. All rights reserved.
 //
 
