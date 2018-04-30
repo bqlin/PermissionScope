@@ -60,7 +60,6 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 /// Returns whether PermissionScope is waiting for the user to enable/disable motion access or not.
 @property (nonatomic, assign) BOOL waitingForMotion;
 
-
 /**
  A timer that fires the event to let us know the user has asked for
  notifications permission.
@@ -380,646 +379,6 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 	self.notificationTimer = nil;
 }
 
-// MARK: - Status and Requests for each permission
-
-// MARK: Location
-
-/**
- Returns the current permission status for accessing LocationAlways.
- 
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusLocationAlways {
-	if (![CLLocationManager locationServicesEnabled]) return PermissionStatusDisabled;
-	
-	CLAuthorizationStatus status = [CLLocationManager authorizationStatus];
-	switch (status) {
-		case kCLAuthorizationStatusAuthorizedAlways:{
-			return PermissionStatusAuthorized;
-		} break;
-		case kCLAuthorizationStatusRestricted:
-		case kCLAuthorizationStatusDenied:{
-			return PermissionStatusUnauthorized;
-		} break;
-		case kCLAuthorizationStatusAuthorizedWhenInUse:{
-			// Curious why this happens? Details on upgrading from WhenInUse to Always:
-			// [Check this issue](https://github.com/nickoneill/PermissionScope/issues/24)
-			if ([self.defaults boolForKey:ConstantsNSUserDefaultsKeysRequestedInUseToAlwaysUpgrade]) {
-				return PermissionStatusUnauthorized;
-			} else {
-				return PermissionStatusUnknown;
-			}
-		} break;
-		case kCLAuthorizationStatusNotDetermined:{
-			return PermissionStatusUnknown;
-		} break;
-	}
-}
-
-/**
- Requests access to LocationAlways, if necessary.
- */
-- (void)requestLocationAlways {
-	BOOL hasAlwaysKey = [[NSBundle mainBundle] objectForInfoDictionaryKey:ConstantsInfoPlistKeysLocationAlways] != nil;
-	NSAssert(hasAlwaysKey, @"%@ not found in Info.plist.", ConstantsInfoPlistKeysLocationAlways);
-	
-	PermissionStatus status = [self statusLocationAlways];
-	switch (status) {
-		case PermissionStatusUnknown:{
-			if ([CLLocationManager authorizationStatus] == kCLAuthorizationStatusAuthorizedWhenInUse) {
-				[self.defaults setBool:YES forKey:ConstantsNSUserDefaultsKeysRequestedInUseToAlwaysUpgrade];
-				[self.defaults synchronize];
-			}
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeLocationAlways];
-		} break;
-		case PermissionStatusDisabled:{
-			[self showDeniedAlert:PermissionTypeLocationInUse];
-		} break;
-		default:{} break;
-	}
-}
-
-/**
- Returns the current permission status for accessing LocationWhileInUse.
- 
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusLocationInUse {
-	if (![CLLocationManager locationServicesEnabled]) return PermissionStatusDisabled;
-
-	CLAuthorizationStatus status = [CLLocationManager authorizationStatus];
-	// if you're already "always" authorized, then you don't need in use
-	// but the user can still demote you! So I still use them separately.
-	switch (status) {
-		case kCLAuthorizationStatusAuthorizedWhenInUse:
-		case kCLAuthorizationStatusAuthorizedAlways:{
-			return PermissionStatusAuthorized;
-		} break;
-		case kCLAuthorizationStatusRestricted:
-		case kCLAuthorizationStatusDenied:{
-			return PermissionStatusUnauthorized;
-		} break;
-		case kCLAuthorizationStatusNotDetermined:{
-			return PermissionStatusUnknown;
-		} break;
-	}
-}
-
-/**
- Requests access to LocationWhileInUse, if necessary.
- */
-- (void)requestLocationInUse {
-	bool hasWhenInUseKey = [[NSBundle mainBundle] objectForInfoDictionaryKey:ConstantsInfoPlistKeysLocationWhenInUse] != nil;
-	NSAssert(hasWhenInUseKey, @"%@ not found in Info.plist.", ConstantsInfoPlistKeysLocationWhenInUse);
-
-	PermissionStatus status = [self statusLocationInUse];
-	switch (status) {
-		case PermissionStatusUnknown:{
-			[self.locationManager requestWhenInUseAuthorization];
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeLocationInUse];
-		} break;
-		case PermissionStatusDisabled:{
-			[self showDisabledAlert:PermissionTypeLocationInUse];
-		} break;
-		default:{} break;
-	}
-}
-
-// MARK: - Customizing the permissions
-
-/**
- Adds a permission configuration to PermissionScope.
- 
- - parameter message: Body label's text on the presented dialog when requesting access.
- */
-- (void)addPermission:(id<Permission>)permission message:(NSString *)message {
-	NSAssert(message.length, @"Including a message about your permission usage is helpful");
-	NSAssert(self.configuredPermissions.count < 3, @"Ask for three or fewer permissions at a time");
-	for (id<Permission> configuredPermission in self.configuredPermissions) {
-		NSCAssert(configuredPermission.type != permission.type, @"Permission for %@ already set", PrettyDescriptionWithPermissionType(permission.type));
-	}
-	[self.configuredPermissions addObject:permission];
-	self.permissionMessages[@(permission.type)] = message;
-	
-	if (permission.type == PermissionTypeBluetooth && self.askedBluetooth) {
-		[self triggerBluetoothStatusUpdate];
-	} else if (permission.type == PermissionTypeMotion && self.askedMotion) {
-		[self triggerMotionStatusUpdate];
-	}
-}
-
-// use the code we have to see permission status
-- (NSDictionary<NSNumber *, NSNumber *> *)permissionStatuses:(NSArray<NSNumber *> *)permissionTypes {
-	NSMutableDictionary *statuses = [NSMutableDictionary dictionary];
-	NSArray *types = permissionTypes ? permissionTypes :
-  @[
-	@(PermissionTypeContacts),
-	@(PermissionTypeLocationAlways),
-	@(PermissionTypeLocationInUse),
-	@(PermissionTypeNotifications),
-	@(PermissionTypeMicrophone),
-	@(PermissionTypeCamera),
-	@(PermissionTypePhotos),
-	@(PermissionTypeReminders),
-	@(PermissionTypeEvents),
-	@(PermissionTypeBluetooth),
-	@(PermissionTypeMotion),
-	];
-	
-	for (NSNumber *type in types) {
-		[self statusForPermission:type.integerValue completion:^(PermissionStatus status) {
-			statuses[type] = @(status);
-		}];
-	}
-	return statuses;
-}
-
-// MARK: Contacts
-
-/**
- Returns the current permission status for accessing Contacts.
- 
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusContacts {
-	if (BQ_AVAILABLE(9)) {
-		CNAuthorizationStatus status = [CNContactStore authorizationStatusForEntityType:CNEntityTypeContacts];
-		switch (status) {
-			case CNAuthorizationStatusAuthorized:{
-				return PermissionStatusAuthorized;
-			} break;
-			case CNAuthorizationStatusRestricted:
-			case CNAuthorizationStatusDenied:{
-				return PermissionStatusUnauthorized;
-			} break;
-			case CNAuthorizationStatusNotDetermined:{
-				return PermissionStatusUnknown;
-			} break;
-		}
-	} else {
-		// Fallback on earlier versions
-		ABAuthorizationStatus status = ABAddressBookGetAuthorizationStatus();
-		switch (status) {
-			case kABAuthorizationStatusAuthorized:{
-				return PermissionStatusAuthorized;
-			} break;
-			case kABAuthorizationStatusRestricted:
-			case kABAuthorizationStatusDenied:{
-				return PermissionStatusUnauthorized;
-			} break;
-			case kABAuthorizationStatusNotDetermined:{
-				return PermissionStatusUnknown;
-			} break;
-		}
-	}
-}
-
-/**
- Requests access to Contacts, if necessary.
- */
-- (void)requestContacts {
-	PermissionStatus status = [self statusContacts];
-	switch (status) {
-		case PermissionStatusUnknown:{
-			__weak typeof(self) weakSelf = self;
-			if (BQ_AVAILABLE(9)) {
-				[[[CNContactStore alloc] init] requestAccessForEntityType:CNEntityTypeContacts completionHandler:^(BOOL granted, NSError * _Nullable error) {
-					[weakSelf detectAndCallback];
-				}];
-			} else {
-				ABAddressBookRequestAccessWithCompletion(nil, ^(bool granted, CFErrorRef error) {
-					[weakSelf detectAndCallback];
-				});
-			}
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeContacts];
-		} break;
-		default:{} break;
-	}
-}
-
-// MARK: Notifications
-
-/**
- Returns the current permission status for accessing Notifications.
- 
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusNotifications {
-	UIUserNotificationSettings *settings = [UIApplication sharedApplication].currentUserNotificationSettings;
-	if (settings.types || settings.types != UIUserNotificationTypeNone) {
-		return PermissionStatusAuthorized;
-	} else {
-		if ([self.defaults boolForKey:ConstantsNSUserDefaultsKeysRequestedNotifications]) {
-			return PermissionStatusUnauthorized;
-		} else {
-			return PermissionStatusUnknown;
-		}
-	}
-}
-
-/**
- To simulate the denied status for a notifications permission,
- we track when the permission has been asked for and then detect
- when the app becomes active again. If the permission is not granted
- immediately after becoming active, the user has cancelled or denied
- the request.
- 
- This function is called when we want to show the notifications
- alert, kicking off the entire process.
- */
-- (void)showingNotificationPermission {
-	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillResignActiveNotification object:nil];
-	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(finishedShowingNotificationPermission) name:UIApplicationDidBecomeActiveNotification object:nil];
-	[self.notificationTimer invalidate];
-}
-
-/**
- This function is triggered when the app becomes 'active' again after
- showing the notification permission dialog.
- 
- See `showingNotificationPermission` for a more detailed description
- of the entire process.
- */
-- (void)finishedShowingNotificationPermission {
-	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillResignActiveNotification object:nil];
-	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];
-	[self.notificationTimer invalidate];
-	
-	[self.defaults setBool:YES forKey:ConstantsNSUserDefaultsKeysRequestedNotifications];
-	[self.defaults synchronize];
-	
-	// callback after a short delay, otherwise notifications don't report proper auth
-	__weak typeof(self) weakSelf = self;
-	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(100 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
-		[self getResultsForConfig:^(NSArray<PermissionResult *> *results) {
-			PermissionResult *notificationResult = nil;
-			for (PermissionResult *result in results) {
-				if (result.type == PermissionTypeNotifications) {
-					notificationResult = result;
-					break;
-				}
-			}
-			if (!notificationResult) return;
-			if (notificationResult.status == PermissionStatusUnknown) {
-				[weakSelf showDeniedAlert:notificationResult.type];
-			} else {
-				[weakSelf detectAndCallback];
-			}
-		}];
-	});
-
-}
-
-/**
- Requests access to User Notifications, if necessary.
- */
-- (void)requestNotifications {
-	PermissionStatus status = [self statusNotifications];
-	switch (status) {
-		case PermissionStatusUnknown:{
-			NotificationsPermission *notificationsPermission = nil;
-			for (NSObject<Permission> *permission in self.configuredPermissions) {
-				if ([permission isKindOfClass:[NotificationsPermission class]]) {
-					notificationsPermission = (NotificationsPermission *)permission;
-					break;
-				}
-			}
-			NSSet<UIUserNotificationCategory *> *notificationsPermissionSet = notificationsPermission.notificationCategories;
-			[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(showingNotificationPermission) name:UIApplicationWillResignActiveNotification object:nil];
-			self.notificationTimer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(finishedShowingNotificationPermission) userInfo:nil repeats:NO];
-			[[UIApplication sharedApplication] registerUserNotificationSettings:[UIUserNotificationSettings settingsForTypes:UIUserNotificationTypeAlert | UIUserNotificationTypeSound | UIUserNotificationTypeBadge categories:notificationsPermissionSet]];
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeNotifications];
-		} break;
-		case PermissionStatusDisabled:{
-			[self showDisabledAlert:PermissionTypeNotifications];
-		} break;
-		case PermissionStatusAuthorized:{
-			[self detectAndCallback];
-		} break;
-	}
-}
-
-// MARK: Microphone
-
-/**
- Returns the current permission status for accessing the Microphone.
-
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusMicrophone {
-	AVAudioSessionRecordPermission recordPermission = [AVAudioSession sharedInstance].recordPermission;
-	switch (recordPermission) {
-		case AVAudioSessionRecordPermissionDenied:{
-			return PermissionStatusUnauthorized;
-		} break;
-		case AVAudioSessionRecordPermissionGranted:{
-			return PermissionStatusAuthorized;
-		} break;
-		default:{
-			return PermissionStatusUnknown;
-		} break;
-	}
-}
-
-/**
- Requests access to the Microphone, if necessary.
- */
-- (void)requestMicrophone {
-	PermissionStatus status = [self statusMicrophone];
-	switch (status) {
-		case PermissionStatusUnknown:{
-			__weak typeof(self) weakSelf = self;
-			[[AVAudioSession sharedInstance] requestRecordPermission:^(BOOL granted) {
-				[weakSelf detectAndCallback];
-			}];
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeMicrophone];
-		} break;
-		case PermissionStatusDisabled:{
-			[self showDisabledAlert:PermissionTypeMicrophone];
-		} break;
-		case PermissionStatusAuthorized:{} break;
-	}
-}
-
-// MARK: Camera
-
-/**
- Returns the current permission status for accessing the Camera.
-
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusCamera {
-	AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
-	switch (status) {
-		case AVAuthorizationStatusAuthorized:{
-			return PermissionStatusAuthorized;
-		} break;
-		case AVAuthorizationStatusRestricted:
-		case AVAuthorizationStatusDenied:{
-			return PermissionStatusUnauthorized;
-		} break;
-		case AVAuthorizationStatusNotDetermined:{
-			return PermissionStatusUnknown;
-		} break;
-	}
-}
-
-/**
- Requests access to the Camera, if necessary.
- */
-- (void)requestCamera {
-	PermissionStatus status = [self statusCamera];
-	switch (status) {
-		case PermissionStatusUnknown:{
-			__weak typeof(self) weakSelf = self;
-			[AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
-				[weakSelf detectAndCallback];
-			}];
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeCamera];
-		} break;
-		case PermissionStatusDisabled:{
-			[self showDisabledAlert:PermissionTypeCamera];
-		} break;
-		case PermissionStatusAuthorized:{} break;
-	}
-}
-
-// MARK: Photos
-
-/**
- Returns the current permission status for accessing Photos.
-
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusPhotos {
-	PHAuthorizationStatus status = [PHPhotoLibrary authorizationStatus];
-	switch (status) {
-		case PHAuthorizationStatusAuthorized:{
-			return PermissionStatusAuthorized;
-		} break;
-		case PHAuthorizationStatusDenied:
-		case PHAuthorizationStatusRestricted:{
-			return PermissionStatusUnauthorized;
-		} break;
-		case PHAuthorizationStatusNotDetermined:{
-			return PermissionStatusUnknown;
-		} break;
-	}
-}
-
-/**
- Requests access to Photos, if necessary.
- */
-- (void)requestPhotos {
-	PermissionStatus status = [self statusPhotos];
-	switch (status) {
-		case PermissionStatusUnknown:{
-			__weak typeof(self) weakSelf = self;
-			[PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
-				[weakSelf detectAndCallback];
-			}];
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypePhotos];
-		} break;
-		case PermissionStatusDisabled:{
-			[self showDisabledAlert:PermissionTypePhotos];
-		} break;
-		case PermissionStatusAuthorized:{} break;
-	}
-}
-
-// MARK: Reminders
-
-/**
- Returns the current permission status for accessing Reminders.
-
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusReminders {
-	EKAuthorizationStatus status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeReminder];
-	switch (status) {
-		case EKAuthorizationStatusAuthorized:{
-			return PermissionStatusAuthorized;
-		} break;
-		case EKAuthorizationStatusRestricted:
-		case EKAuthorizationStatusDenied:{
-			return PermissionStatusUnauthorized;
-		} break;
-		case EKAuthorizationStatusNotDetermined:{
-			return PermissionStatusUnknown;
-		} break;
-	}
-}
-
-/**
- Requests access to Reminders, if necessary.
- */
-- (void)requestReminders {
-	PermissionStatus status = [self statusReminders];
-	switch (status) {
-		case PermissionStatusUnknown:{
-			__weak typeof(self) weakSelf = self;
-			[[[EKEventStore alloc] init] requestAccessToEntityType:EKEntityTypeReminder completion:^(BOOL granted, NSError * _Nullable error) {
-				[weakSelf detectAndCallback];
-			}];
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeReminders];
-		} break;
-		default:{} break;
-	}
-}
-
-// MARK: Events
-
-/**
- Returns the current permission status for accessing Events.
-
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusEvents {
-	EKAuthorizationStatus status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeEvent];
-	switch (status) {
-		case EKAuthorizationStatusAuthorized:{
-			return PermissionStatusAuthorized;
-		} break;
-		case EKAuthorizationStatusRestricted:
-		case EKAuthorizationStatusDenied:{
-			return PermissionStatusUnauthorized;
-		} break;
-		case EKAuthorizationStatusNotDetermined:{
-			return PermissionStatusUnknown;
-		} break;
-	}
-}
-
-/**
- Requests access to Events, if necessary.
- */
-- (void)requestEvents {
-	PermissionStatus status = [self statusEvents];
-	switch (status) {
-		case PermissionStatusUnknown:{
-			__weak typeof(self) weakSelf = self;
-			[[[EKEventStore alloc] init] requestAccessToEntityType:EKEntityTypeEvent completion:^(BOOL granted, NSError * _Nullable error) {
-				[weakSelf detectAndCallback];
-			}];
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeEvents];
-		} break;
-		default:{} break;
-	}
-}
-
-// MARK: Bluetooth
-
-/**
- Returns the current permission status for accessing Bluetooth.
-
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusBluetooth {
-	// if already asked for bluetooth before, do a request to get status, else wait for user to request
-	if (self.askedBluetooth) {
-		[self triggerBluetoothStatusUpdate];
-	} else {
-		return PermissionStatusUnknown;
-	}
-
-	CBPeripheralManagerAuthorizationStatus authorizationStatus = [CBPeripheralManager authorizationStatus];
-	switch (authorizationStatus) {
-		case CBPeripheralManagerAuthorizationStatusRestricted:{
-			return PermissionStatusDisabled;
-		} break;
-		case CBPeripheralManagerAuthorizationStatusDenied:{
-			return PermissionStatusUnauthorized;
-		} break;
-		case CBPeripheralManagerAuthorizationStatusAuthorized:{
-			return PermissionStatusAuthorized;
-		} break;
-		default:{} break;
-	}
-	CBPeripheralManagerState state = (CBPeripheralManagerState)self.bluetoothManager.state;
-	switch (state) {
-		case CBPeripheralManagerStateUnsupported:
-		case CBPeripheralManagerStatePoweredOff:{
-			return PermissionStatusDisabled;
-		} break;
-		case CBPeripheralManagerStateUnauthorized:{
-			return PermissionStatusUnauthorized;
-		} break;
-		case CBPeripheralManagerStatePoweredOn:{
-			return PermissionStatusAuthorized;
-		} break;
-		default:{
-			return PermissionStatusUnknown;
-		} break;
-	}
-}
-
-/**
- Requests access to Bluetooth, if necessary.
- */
-- (void)requestBluetooth {
-	PermissionStatus status = [self statusBluetooth];
-	switch (status) {
-		case PermissionStatusDisabled:{
-			[self showDisabledAlert:PermissionTypeBluetooth];
-		} break;
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeBluetooth];
-		} break;
-		case PermissionStatusUnknown:{
-			[self triggerBluetoothStatusUpdate];
-		} break;
-		default:{} break;
-	}
-}
-
-// MARK: Core Motion Activity
-
-/**
- Returns the current permission status for accessing Core Motion Activity.
-
- - returns: Permission status for the requested type.
- */
-- (PermissionStatus)statusMotion {
-	if (self.askedMotion) {
-		[self triggerMotionStatusUpdate];
-	}
-	return self.motionPermissionStatus;
-}
-
-/**
- Requests access to Core Motion Activity, if necessary.
- */
-- (void)requestMotion {
-	PermissionStatus status = [self statusMotion];
-	switch (status) {
-		case PermissionStatusUnauthorized:{
-			[self showDeniedAlert:PermissionTypeMotion];
-		} break;
-		case PermissionStatusUnknown:{
-			[self triggerMotionStatusUpdate];
-		} break;
-		default:{} break;
-	}
-}
-
 #pragma mark - private
 
 // MARK: - UI
@@ -1229,6 +588,670 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 }
 
 /**
+ Sets the style for permission buttons with unauthorized status.
+ 
+ - parameter button: Permission button
+ */
+- (void)setButtonUnauthorizedStyle:(UIButton *)button {
+	button.layer.borderWidth = 0;
+	button.backgroundColor = self.unauthorizedButtonColor ? self.unauthorizedButtonColor : self.authorizedButtonColor.inverseColor;
+	[button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+}
+
+/**
+ Sets the style for permission buttons with authorized status.
+ 
+ - parameter button: Permission button
+ */
+- (void)setButtonAuthorizedStyle:(UIButton *)button {
+	button.layer.borderWidth = 0;
+	button.backgroundColor = self.authorizedButtonColor;
+	[button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
+}
+
+// MARK: - Status and Requests for each permission
+
+// MARK: Location
+
+/**
+ Returns the current permission status for accessing LocationAlways.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusLocationAlways {
+	if (![CLLocationManager locationServicesEnabled]) return PermissionStatusDisabled;
+	
+	CLAuthorizationStatus status = [CLLocationManager authorizationStatus];
+	switch (status) {
+		case kCLAuthorizationStatusAuthorizedAlways:{
+			return PermissionStatusAuthorized;
+		} break;
+		case kCLAuthorizationStatusRestricted:
+		case kCLAuthorizationStatusDenied:{
+			return PermissionStatusUnauthorized;
+		} break;
+		case kCLAuthorizationStatusAuthorizedWhenInUse:{
+			// Curious why this happens? Details on upgrading from WhenInUse to Always:
+			// [Check this issue](https://github.com/nickoneill/PermissionScope/issues/24)
+			if ([self.defaults boolForKey:ConstantsNSUserDefaultsKeysRequestedInUseToAlwaysUpgrade]) {
+				return PermissionStatusUnauthorized;
+			} else {
+				return PermissionStatusUnknown;
+			}
+		} break;
+		case kCLAuthorizationStatusNotDetermined:{
+			return PermissionStatusUnknown;
+		} break;
+	}
+}
+
+/**
+ Requests access to LocationAlways, if necessary.
+ */
+- (void)requestLocationAlways {
+	BOOL hasAlwaysKey = [[NSBundle mainBundle] objectForInfoDictionaryKey:ConstantsInfoPlistKeysLocationAlways] != nil;
+	NSAssert(hasAlwaysKey, @"%@ not found in Info.plist.", ConstantsInfoPlistKeysLocationAlways);
+	
+	PermissionStatus status = [self statusLocationAlways];
+	switch (status) {
+		case PermissionStatusUnknown:{
+			if ([CLLocationManager authorizationStatus] == kCLAuthorizationStatusAuthorizedWhenInUse) {
+				[self.defaults setBool:YES forKey:ConstantsNSUserDefaultsKeysRequestedInUseToAlwaysUpgrade];
+				[self.defaults synchronize];
+			}
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeLocationAlways];
+		} break;
+		case PermissionStatusDisabled:{
+			[self showDeniedAlert:PermissionTypeLocationInUse];
+		} break;
+		default:{} break;
+	}
+}
+
+/**
+ Returns the current permission status for accessing LocationWhileInUse.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusLocationInUse {
+	if (![CLLocationManager locationServicesEnabled]) return PermissionStatusDisabled;
+	
+	CLAuthorizationStatus status = [CLLocationManager authorizationStatus];
+	// if you're already "always" authorized, then you don't need in use
+	// but the user can still demote you! So I still use them separately.
+	switch (status) {
+		case kCLAuthorizationStatusAuthorizedWhenInUse:
+		case kCLAuthorizationStatusAuthorizedAlways:{
+			return PermissionStatusAuthorized;
+		} break;
+		case kCLAuthorizationStatusRestricted:
+		case kCLAuthorizationStatusDenied:{
+			return PermissionStatusUnauthorized;
+		} break;
+		case kCLAuthorizationStatusNotDetermined:{
+			return PermissionStatusUnknown;
+		} break;
+	}
+}
+
+/**
+ Requests access to LocationWhileInUse, if necessary.
+ */
+- (void)requestLocationInUse {
+	bool hasWhenInUseKey = [[NSBundle mainBundle] objectForInfoDictionaryKey:ConstantsInfoPlistKeysLocationWhenInUse] != nil;
+	NSAssert(hasWhenInUseKey, @"%@ not found in Info.plist.", ConstantsInfoPlistKeysLocationWhenInUse);
+	
+	PermissionStatus status = [self statusLocationInUse];
+	switch (status) {
+		case PermissionStatusUnknown:{
+			[self.locationManager requestWhenInUseAuthorization];
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeLocationInUse];
+		} break;
+		case PermissionStatusDisabled:{
+			[self showDisabledAlert:PermissionTypeLocationInUse];
+		} break;
+		default:{} break;
+	}
+}
+
+// MARK: - Customizing the permissions
+
+/**
+ Adds a permission configuration to PermissionScope.
+ 
+ - parameter message: Body label's text on the presented dialog when requesting access.
+ */
+- (void)addPermission:(id<Permission>)permission message:(NSString *)message {
+	NSAssert(message.length, @"Including a message about your permission usage is helpful");
+	NSAssert(self.configuredPermissions.count < 3, @"Ask for three or fewer permissions at a time");
+	for (id<Permission> configuredPermission in self.configuredPermissions) {
+		NSCAssert(configuredPermission.type != permission.type, @"Permission for %@ already set", PrettyDescriptionWithPermissionType(permission.type));
+	}
+	[self.configuredPermissions addObject:permission];
+	self.permissionMessages[@(permission.type)] = message;
+	
+	if (permission.type == PermissionTypeBluetooth && self.askedBluetooth) {
+		[self triggerBluetoothStatusUpdate];
+	} else if (permission.type == PermissionTypeMotion && self.askedMotion) {
+		[self triggerMotionStatusUpdate];
+	}
+}
+
+// use the code we have to see permission status
+- (NSDictionary<NSNumber *, NSNumber *> *)permissionStatuses:(NSArray<NSNumber *> *)permissionTypes {
+	NSMutableDictionary *statuses = [NSMutableDictionary dictionary];
+	NSArray *types = permissionTypes ? permissionTypes :
+	@[
+	  @(PermissionTypeContacts),
+	  @(PermissionTypeLocationAlways),
+	  @(PermissionTypeLocationInUse),
+	  @(PermissionTypeNotifications),
+	  @(PermissionTypeMicrophone),
+	  @(PermissionTypeCamera),
+	  @(PermissionTypePhotos),
+	  @(PermissionTypeReminders),
+	  @(PermissionTypeEvents),
+	  @(PermissionTypeBluetooth),
+	  @(PermissionTypeMotion),
+	  ];
+	
+	for (NSNumber *type in types) {
+		[self statusForPermission:type.integerValue completion:^(PermissionStatus status) {
+			statuses[type] = @(status);
+		}];
+	}
+	return statuses;
+}
+
+// MARK: Contacts
+
+/**
+ Returns the current permission status for accessing Contacts.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusContacts {
+	if (BQ_AVAILABLE(9)) {
+		CNAuthorizationStatus status = [CNContactStore authorizationStatusForEntityType:CNEntityTypeContacts];
+		switch (status) {
+			case CNAuthorizationStatusAuthorized:{
+				return PermissionStatusAuthorized;
+			} break;
+			case CNAuthorizationStatusRestricted:
+			case CNAuthorizationStatusDenied:{
+				return PermissionStatusUnauthorized;
+			} break;
+			case CNAuthorizationStatusNotDetermined:{
+				return PermissionStatusUnknown;
+			} break;
+		}
+	} else {
+		// Fallback on earlier versions
+		ABAuthorizationStatus status = ABAddressBookGetAuthorizationStatus();
+		switch (status) {
+			case kABAuthorizationStatusAuthorized:{
+				return PermissionStatusAuthorized;
+			} break;
+			case kABAuthorizationStatusRestricted:
+			case kABAuthorizationStatusDenied:{
+				return PermissionStatusUnauthorized;
+			} break;
+			case kABAuthorizationStatusNotDetermined:{
+				return PermissionStatusUnknown;
+			} break;
+		}
+	}
+}
+
+/**
+ Requests access to Contacts, if necessary.
+ */
+- (void)requestContacts {
+	PermissionStatus status = [self statusContacts];
+	switch (status) {
+		case PermissionStatusUnknown:{
+			__weak typeof(self) weakSelf = self;
+			if (BQ_AVAILABLE(9)) {
+				[[[CNContactStore alloc] init] requestAccessForEntityType:CNEntityTypeContacts completionHandler:^(BOOL granted, NSError * _Nullable error) {
+					[weakSelf detectAndCallback];
+				}];
+			} else {
+				ABAddressBookRequestAccessWithCompletion(nil, ^(bool granted, CFErrorRef error) {
+					[weakSelf detectAndCallback];
+				});
+			}
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeContacts];
+		} break;
+		default:{} break;
+	}
+}
+
+// MARK: Notifications
+
+/**
+ Returns the current permission status for accessing Notifications.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusNotifications {
+	UIUserNotificationSettings *settings = [UIApplication sharedApplication].currentUserNotificationSettings;
+	if (settings.types || settings.types != UIUserNotificationTypeNone) {
+		return PermissionStatusAuthorized;
+	} else {
+		if ([self.defaults boolForKey:ConstantsNSUserDefaultsKeysRequestedNotifications]) {
+			return PermissionStatusUnauthorized;
+		} else {
+			return PermissionStatusUnknown;
+		}
+	}
+}
+
+/**
+ To simulate the denied status for a notifications permission,
+ we track when the permission has been asked for and then detect
+ when the app becomes active again. If the permission is not granted
+ immediately after becoming active, the user has cancelled or denied
+ the request.
+ 
+ This function is called when we want to show the notifications
+ alert, kicking off the entire process.
+ */
+- (void)showingNotificationPermission {
+	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillResignActiveNotification object:nil];
+	[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(finishedShowingNotificationPermission) name:UIApplicationDidBecomeActiveNotification object:nil];
+	[self.notificationTimer invalidate];
+}
+
+/**
+ This function is triggered when the app becomes 'active' again after
+ showing the notification permission dialog.
+ 
+ See `showingNotificationPermission` for a more detailed description
+ of the entire process.
+ */
+- (void)finishedShowingNotificationPermission {
+	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationWillResignActiveNotification object:nil];
+	[[NSNotificationCenter defaultCenter] removeObserver:self name:UIApplicationDidBecomeActiveNotification object:nil];
+	[self.notificationTimer invalidate];
+	
+	[self.defaults setBool:YES forKey:ConstantsNSUserDefaultsKeysRequestedNotifications];
+	[self.defaults synchronize];
+	
+	// callback after a short delay, otherwise notifications don't report proper auth
+	__weak typeof(self) weakSelf = self;
+	dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(100 * NSEC_PER_MSEC)), dispatch_get_main_queue(), ^{
+		[self getResultsForConfig:^(NSArray<PermissionResult *> *results) {
+			PermissionResult *notificationResult = nil;
+			for (PermissionResult *result in results) {
+				if (result.type == PermissionTypeNotifications) {
+					notificationResult = result;
+					break;
+				}
+			}
+			if (!notificationResult) return;
+			if (notificationResult.status == PermissionStatusUnknown) {
+				[weakSelf showDeniedAlert:notificationResult.type];
+			} else {
+				[weakSelf detectAndCallback];
+			}
+		}];
+	});
+	
+}
+
+/**
+ Requests access to User Notifications, if necessary.
+ */
+- (void)requestNotifications {
+	PermissionStatus status = [self statusNotifications];
+	switch (status) {
+		case PermissionStatusUnknown:{
+			NotificationsPermission *notificationsPermission = nil;
+			for (NSObject<Permission> *permission in self.configuredPermissions) {
+				if ([permission isKindOfClass:[NotificationsPermission class]]) {
+					notificationsPermission = (NotificationsPermission *)permission;
+					break;
+				}
+			}
+			NSSet<UIUserNotificationCategory *> *notificationsPermissionSet = notificationsPermission.notificationCategories;
+			[[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(showingNotificationPermission) name:UIApplicationWillResignActiveNotification object:nil];
+			self.notificationTimer = [NSTimer scheduledTimerWithTimeInterval:1 target:self selector:@selector(finishedShowingNotificationPermission) userInfo:nil repeats:NO];
+			[[UIApplication sharedApplication] registerUserNotificationSettings:[UIUserNotificationSettings settingsForTypes:UIUserNotificationTypeAlert | UIUserNotificationTypeSound | UIUserNotificationTypeBadge categories:notificationsPermissionSet]];
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeNotifications];
+		} break;
+		case PermissionStatusDisabled:{
+			[self showDisabledAlert:PermissionTypeNotifications];
+		} break;
+		case PermissionStatusAuthorized:{
+			[self detectAndCallback];
+		} break;
+	}
+}
+
+// MARK: Microphone
+
+/**
+ Returns the current permission status for accessing the Microphone.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusMicrophone {
+	AVAudioSessionRecordPermission recordPermission = [AVAudioSession sharedInstance].recordPermission;
+	switch (recordPermission) {
+		case AVAudioSessionRecordPermissionDenied:{
+			return PermissionStatusUnauthorized;
+		} break;
+		case AVAudioSessionRecordPermissionGranted:{
+			return PermissionStatusAuthorized;
+		} break;
+		default:{
+			return PermissionStatusUnknown;
+		} break;
+	}
+}
+
+/**
+ Requests access to the Microphone, if necessary.
+ */
+- (void)requestMicrophone {
+	PermissionStatus status = [self statusMicrophone];
+	switch (status) {
+		case PermissionStatusUnknown:{
+			__weak typeof(self) weakSelf = self;
+			[[AVAudioSession sharedInstance] requestRecordPermission:^(BOOL granted) {
+				[weakSelf detectAndCallback];
+			}];
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeMicrophone];
+		} break;
+		case PermissionStatusDisabled:{
+			[self showDisabledAlert:PermissionTypeMicrophone];
+		} break;
+		case PermissionStatusAuthorized:{} break;
+	}
+}
+
+// MARK: Camera
+
+/**
+ Returns the current permission status for accessing the Camera.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusCamera {
+	AVAuthorizationStatus status = [AVCaptureDevice authorizationStatusForMediaType:AVMediaTypeVideo];
+	switch (status) {
+		case AVAuthorizationStatusAuthorized:{
+			return PermissionStatusAuthorized;
+		} break;
+		case AVAuthorizationStatusRestricted:
+		case AVAuthorizationStatusDenied:{
+			return PermissionStatusUnauthorized;
+		} break;
+		case AVAuthorizationStatusNotDetermined:{
+			return PermissionStatusUnknown;
+		} break;
+	}
+}
+
+/**
+ Requests access to the Camera, if necessary.
+ */
+- (void)requestCamera {
+	PermissionStatus status = [self statusCamera];
+	switch (status) {
+		case PermissionStatusUnknown:{
+			__weak typeof(self) weakSelf = self;
+			[AVCaptureDevice requestAccessForMediaType:AVMediaTypeVideo completionHandler:^(BOOL granted) {
+				[weakSelf detectAndCallback];
+			}];
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeCamera];
+		} break;
+		case PermissionStatusDisabled:{
+			[self showDisabledAlert:PermissionTypeCamera];
+		} break;
+		case PermissionStatusAuthorized:{} break;
+	}
+}
+
+// MARK: Photos
+
+/**
+ Returns the current permission status for accessing Photos.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusPhotos {
+	PHAuthorizationStatus status = [PHPhotoLibrary authorizationStatus];
+	switch (status) {
+		case PHAuthorizationStatusAuthorized:{
+			return PermissionStatusAuthorized;
+		} break;
+		case PHAuthorizationStatusDenied:
+		case PHAuthorizationStatusRestricted:{
+			return PermissionStatusUnauthorized;
+		} break;
+		case PHAuthorizationStatusNotDetermined:{
+			return PermissionStatusUnknown;
+		} break;
+	}
+}
+
+/**
+ Requests access to Photos, if necessary.
+ */
+- (void)requestPhotos {
+	PermissionStatus status = [self statusPhotos];
+	switch (status) {
+		case PermissionStatusUnknown:{
+			__weak typeof(self) weakSelf = self;
+			[PHPhotoLibrary requestAuthorization:^(PHAuthorizationStatus status) {
+				[weakSelf detectAndCallback];
+			}];
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypePhotos];
+		} break;
+		case PermissionStatusDisabled:{
+			[self showDisabledAlert:PermissionTypePhotos];
+		} break;
+		case PermissionStatusAuthorized:{} break;
+	}
+}
+
+// MARK: Reminders
+
+/**
+ Returns the current permission status for accessing Reminders.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusReminders {
+	EKAuthorizationStatus status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeReminder];
+	switch (status) {
+		case EKAuthorizationStatusAuthorized:{
+			return PermissionStatusAuthorized;
+		} break;
+		case EKAuthorizationStatusRestricted:
+		case EKAuthorizationStatusDenied:{
+			return PermissionStatusUnauthorized;
+		} break;
+		case EKAuthorizationStatusNotDetermined:{
+			return PermissionStatusUnknown;
+		} break;
+	}
+}
+
+/**
+ Requests access to Reminders, if necessary.
+ */
+- (void)requestReminders {
+	PermissionStatus status = [self statusReminders];
+	switch (status) {
+		case PermissionStatusUnknown:{
+			__weak typeof(self) weakSelf = self;
+			[[[EKEventStore alloc] init] requestAccessToEntityType:EKEntityTypeReminder completion:^(BOOL granted, NSError * _Nullable error) {
+				[weakSelf detectAndCallback];
+			}];
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeReminders];
+		} break;
+		default:{} break;
+	}
+}
+
+// MARK: Events
+
+/**
+ Returns the current permission status for accessing Events.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusEvents {
+	EKAuthorizationStatus status = [EKEventStore authorizationStatusForEntityType:EKEntityTypeEvent];
+	switch (status) {
+		case EKAuthorizationStatusAuthorized:{
+			return PermissionStatusAuthorized;
+		} break;
+		case EKAuthorizationStatusRestricted:
+		case EKAuthorizationStatusDenied:{
+			return PermissionStatusUnauthorized;
+		} break;
+		case EKAuthorizationStatusNotDetermined:{
+			return PermissionStatusUnknown;
+		} break;
+	}
+}
+
+/**
+ Requests access to Events, if necessary.
+ */
+- (void)requestEvents {
+	PermissionStatus status = [self statusEvents];
+	switch (status) {
+		case PermissionStatusUnknown:{
+			__weak typeof(self) weakSelf = self;
+			[[[EKEventStore alloc] init] requestAccessToEntityType:EKEntityTypeEvent completion:^(BOOL granted, NSError * _Nullable error) {
+				[weakSelf detectAndCallback];
+			}];
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeEvents];
+		} break;
+		default:{} break;
+	}
+}
+
+// MARK: Bluetooth
+
+/**
+ Returns the current permission status for accessing Bluetooth.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusBluetooth {
+	// if already asked for bluetooth before, do a request to get status, else wait for user to request
+	if (self.askedBluetooth) {
+		[self triggerBluetoothStatusUpdate];
+	} else {
+		return PermissionStatusUnknown;
+	}
+	
+	CBPeripheralManagerAuthorizationStatus authorizationStatus = [CBPeripheralManager authorizationStatus];
+	switch (authorizationStatus) {
+		case CBPeripheralManagerAuthorizationStatusRestricted:{
+			return PermissionStatusDisabled;
+		} break;
+		case CBPeripheralManagerAuthorizationStatusDenied:{
+			return PermissionStatusUnauthorized;
+		} break;
+		case CBPeripheralManagerAuthorizationStatusAuthorized:{
+			return PermissionStatusAuthorized;
+		} break;
+		default:{} break;
+	}
+	CBPeripheralManagerState state = (CBPeripheralManagerState)self.bluetoothManager.state;
+	switch (state) {
+		case CBPeripheralManagerStateUnsupported:
+		case CBPeripheralManagerStatePoweredOff:{
+			return PermissionStatusDisabled;
+		} break;
+		case CBPeripheralManagerStateUnauthorized:{
+			return PermissionStatusUnauthorized;
+		} break;
+		case CBPeripheralManagerStatePoweredOn:{
+			return PermissionStatusAuthorized;
+		} break;
+		default:{
+			return PermissionStatusUnknown;
+		} break;
+	}
+}
+
+/**
+ Requests access to Bluetooth, if necessary.
+ */
+- (void)requestBluetooth {
+	PermissionStatus status = [self statusBluetooth];
+	switch (status) {
+		case PermissionStatusDisabled:{
+			[self showDisabledAlert:PermissionTypeBluetooth];
+		} break;
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeBluetooth];
+		} break;
+		case PermissionStatusUnknown:{
+			[self triggerBluetoothStatusUpdate];
+		} break;
+		default:{} break;
+	}
+}
+
+// MARK: Core Motion Activity
+
+/**
+ Returns the current permission status for accessing Core Motion Activity.
+ 
+ - returns: Permission status for the requested type.
+ */
+- (PermissionStatus)statusMotion {
+	if (self.askedMotion) {
+		[self triggerMotionStatusUpdate];
+	}
+	return self.motionPermissionStatus;
+}
+
+/**
+ Requests access to Core Motion Activity, if necessary.
+ */
+- (void)requestMotion {
+	PermissionStatus status = [self statusMotion];
+	switch (status) {
+		case PermissionStatusUnauthorized:{
+			[self showDeniedAlert:PermissionTypeMotion];
+		} break;
+		case PermissionStatusUnknown:{
+			[self triggerMotionStatusUpdate];
+		} break;
+		default:{} break;
+	}
+}
+
+#pragma mark - private
+
+/**
  Prompts motionManager to request a status update. If permission is not already granted the user will be prompted with the system's permission dialog.
  */
 - (void)triggerMotionStatusUpdate {
@@ -1267,27 +1290,6 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
 	}
 }
 
-/**
- Sets the style for permission buttons with unauthorized status.
- 
- - parameter button: Permission button
- */
-- (void)setButtonUnauthorizedStyle:(UIButton *)button {
-	button.layer.borderWidth = 0;
-	button.backgroundColor = self.unauthorizedButtonColor ? self.unauthorizedButtonColor : self.authorizedButtonColor.inverseColor;
-	[button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-}
-
-/**
- Sets the style for permission buttons with authorized status.
- 
- - parameter button: Permission button
- */
-- (void)setButtonAuthorizedStyle:(UIButton *)button {
-	button.layer.borderWidth = 0;
-	button.backgroundColor = self.authorizedButtonColor;
-	[button setTitleColor:[UIColor whiteColor] forState:UIControlStateNormal];
-}
 
 /**
  Checks whether all the configured permission are authorized or not.
@@ -1346,7 +1348,6 @@ typedef void(^PermissionScopeStatusRequestClosure)(PermissionStatus status);
  - parameter type:       Permission type to be requested
  - parameter completion: Closure called when the request is done.
  */
-
 - (void)statusForPermission:(PermissionType)type completion:(PermissionScopeStatusRequestClosure)completion {
 	// Get permission status
 	PermissionStatus permissionStatus;
