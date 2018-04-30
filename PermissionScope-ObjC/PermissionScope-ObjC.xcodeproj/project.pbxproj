@@ -20,7 +20,6 @@
 		0378EB1D2096BAB7001F5A2B /* Permission.m in Sources */ = {isa = PBXBuildFile; fileRef = 03E4DAF02091F4BC003AB62E /* Permission.m */; };
 		0378EB1E2096BAB7001F5A2B /* Extensions.m in Sources */ = {isa = PBXBuildFile; fileRef = 03E4DAEC2091EB55003AB62E /* Extensions.m */; };
 		0378EB212096BB24001F5A2B /* PermissionScopeObjC.h in Headers */ = {isa = PBXBuildFile; fileRef = 0378EB1F2096BB24001F5A2B /* PermissionScopeObjC.h */; };
-		0378EB222096BB24001F5A2B /* Info.plist in Resources */ = {isa = PBXBuildFile; fileRef = 0378EB202096BB24001F5A2B /* Info.plist */; };
 		0378EB232096BC9A001F5A2B /* PermissionScopeObjC.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 0378EAF72096B954001F5A2B /* PermissionScopeObjC.framework */; };
 		0378EB242096BC9A001F5A2B /* PermissionScopeObjC.framework in Embed Frameworks */ = {isa = PBXBuildFile; fileRef = 0378EAF72096B954001F5A2B /* PermissionScopeObjC.framework */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		03D6E2982095BFDF00D10D6C /* Images.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 03D6E2972095BFDF00D10D6C /* Images.xcassets */; };
@@ -274,7 +273,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				0378EB222096BB24001F5A2B /* Info.plist in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
